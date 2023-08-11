@@ -212,6 +212,7 @@ def run_matching_script():
 
 @app.route('/report', methods=['GET', 'POST'])
 def report():
+    return '<html>test123</html>'
     data = None
     if request.method == 'POST':
         start_date = request.form.get('start_date')
