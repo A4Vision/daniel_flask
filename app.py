@@ -212,6 +212,8 @@ def run_matching_script():
 
 @app.route('/report', methods=['GET', 'POST'])
 def report():
+    import datetime
+    open('/tmp/test1', 'w').write(str(datetime.datetime.now()))
     return '<html>test123</html>'
     data = None
     if request.method == 'POST':
