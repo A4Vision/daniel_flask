@@ -211,10 +211,10 @@ def run_matching_script():
     conn.close()
 
 @app.route('/report', methods=['GET', 'POST'])
-def report():
+def report(*args, **kwargs):
     import datetime
     open('/tmp/test1', 'w').write(str(datetime.datetime.now()))
-    return '<html>test123</html>'
+    return 'test123'
     data = None
     if request.method == 'POST':
         start_date = request.form.get('start_date')
@@ -293,7 +293,6 @@ def run_matching():
 
 @app.route('/', methods=['GET', 'POST'])
 def choose_file():
-    return 'test123'
     if request.method == 'POST':
         file = request.files['file']
         table_type = request.form.get('table_type')  # Get the type of table selected by the user
