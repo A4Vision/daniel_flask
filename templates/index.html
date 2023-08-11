@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload CSV</title>
+    <style>
+        .alert {
+            padding: 20px;
+            background-color: #f44336; /* Red */
+            color: white;
+            margin-bottom: 15px;
+        }
+
+        .closebtn {
+            margin-left: 15px;
+            color: white;
+            font-weight: bold;
+            float: right;
+            font-size: 22px;
+            line-height: 20px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .closebtn:hover {
+            color: black;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Upload CSV file</h1>
+
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert">
+                {{ message }}
+                <span class="closebtn" onclick="this.parentElement.style.display='none';">&times;</span>
+            </div>
+        {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    <form action="/" method="post" enctype="multipart/form-data">
+        <select name="table_type" id="tableType">
+            <option value="Products">Products</option>
+            <option value="Sales">Sales</option>
+            <option value="Inventory">Inventory</option>
+            <option value="Colors">Colors</option>
+            <option value="Sizes">Sizes</option>
+            <option value="BarcodesForVariations">Barcodes for Variations</option>
+        </select>
+        <br><br>
+        <input type="file" name="file"><br><br>
+        <input type="submit" value="Upload">
+    </form>
+    <br>
+
+    <!-- Button to run the matching -->
+    <a href="{{ url_for('run_matching') }}" style="padding: 10px; background-color: #007BFF; color: white; border-radius: 5px; text-decoration: none;">Run Data Matching</a>
+    <br><br>
+
+    <!-- Button to generate report -->
+    <a href="{{ url_for('report') }}" style="padding: 10px; background-color: #4CAF50; color: white; border-radius: 5px; text-decoration: none;">Generate Report</a>
+    <br><br>
+    
+    <p>Current Time: {{ current_time }}</p>
+    <p>Last loaded Products: {{ last_loaded_products }}</p>
+    <p>Last loaded Sales: {{ last_loaded_Sales }}</p>
+    <p>Last loaded Inventory: {{ last_loaded_Inventory }}</p>
+    <p>Last loaded Colors: {{ last_loaded_Colors }}</p>
+    <p>Last loaded Sizes: {{ last_loaded_Sizes }}</p>
+    <p>Last loaded Barcodes For Variations: {{ last_loaded_BarcodesForVariations }}</p>
+</body>
+
+</html>
+
+
+
+
