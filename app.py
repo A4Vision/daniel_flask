@@ -293,6 +293,7 @@ def run_matching():
 
 @app.route('/', methods=['GET', 'POST'])
 def choose_file():
+    return 'test123'
     if request.method == 'POST':
         file = request.files['file']
         table_type = request.form.get('table_type')  # Get the type of table selected by the user
