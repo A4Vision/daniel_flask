@@ -212,9 +212,6 @@ def run_matching_script():
 
 @app.route('/report', methods=['GET', 'POST'])
 def report(*args, **kwargs):
-    import datetime
-    open('/tmp/test1', 'w').write(str(datetime.datetime.now()))
-    return 'test123'
     data = None
     if request.method == 'POST':
         start_date = request.form.get('start_date')
