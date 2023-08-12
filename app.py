@@ -1,3 +1,6 @@
+import logging
+import os
+
 import pandas as pd
 import numpy as np
 import sqlite3
@@ -7,18 +10,37 @@ import re
 import datetime
 import psutil
 
-
 app = Flask(__name__)
 app.secret_key = 'secret_key_for_flash_messages'
 
+LOGFILE = "/tmp/mainAppLogs.txt"
+logging.basicConfig(filename=LOGFILE,
+                    filemode='a',
+                    format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
+                    datefmt='%H:%M:%S',
+                    level=logging.DEBUG)
 
+LOGGER = logging.getLogger('mainApp')
+
+LOGGER.info("starting")
+
+
+@app.route('/logs', methods=['GET'])
+def get_logs(*args, **kwargs):
+    max_print_size = 50_000
+    filesize = os.stat(LOGFILE).st_size
+    with open(LOGFILE, "r") as f:
+        if filesize > max_print_size:
+            f.seek(filesize - max_print_size)
+        text = f.read()
+    return "<br>".join(text.splitlines())
 
 
 def generate_report_data(start_date, end_date, importer=None):
     # Convert the dates into YYYY-MM-DD format to make it compatible with SQL
     start_date_sql = pd.to_datetime(start_date).strftime('%Y-%m-%d')
     end_date_sql = pd.to_datetime(end_date).strftime('%Y-%m-%d')
-    #Connect to SQLite database
+    # Connect to SQLite database
     conn = sqlite3.connect('sales_management.db')
 
     # Query to fetch the data
@@ -66,35 +88,45 @@ def generate_report_data(start_date, end_date, importer=None):
     sales_report = sales_report.fillna(0)
 
     # Group by 'child_sku', 'item_type' and other columns, and sum up 'quantity'
-    grouped_report = sales_report.groupby(['child_sku', 'item_type', 'master_sku', 'manufacturer_sku', 'product_name', 'color', 'size', 'main_category', 'importer', 'manufacturer', 'purchase_price', 'consumer_price'], as_index=False).agg({'quantity':'sum', 'bin_quantity':'first'})
+    grouped_report = sales_report.groupby(
+        ['child_sku', 'item_type', 'master_sku', 'manufacturer_sku', 'product_name', 'color', 'size', 'main_category',
+         'importer', 'manufacturer', 'purchase_price', 'consumer_price'], as_index=False).agg(
+        {'quantity': 'sum', 'bin_quantity': 'first'})
 
     # Filter rows where 'item_type' is 'רגיל' and group again
-    grouped_regular = sales_report[sales_report['item_type'] == 'רגיל'].groupby(['child_sku', 'master_sku', 'manufacturer_sku', 'product_name', 'color', 'size', 'main_category', 'importer', 'manufacturer', 'purchase_price', 'consumer_price'], as_index=False).agg({'quantity':'sum', 'bin_quantity':'first'})
+    grouped_regular = sales_report[sales_report['item_type'] == 'רגיל'].groupby(
+        ['child_sku', 'master_sku', 'manufacturer_sku', 'product_name', 'color', 'size', 'main_category', 'importer',
+         'manufacturer', 'purchase_price', 'consumer_price'], as_index=False).agg(
+        {'quantity': 'sum', 'bin_quantity': 'first'})
 
     # Concatenate the two dataframes
     final_report = pd.concat([grouped_report, grouped_regular], ignore_index=True)
 
     # Reorder the columns
-    final_report = final_report[['child_sku', 'master_sku', 'manufacturer_sku', 'product_name', 'color', 'size', 'main_category', 'importer', 'manufacturer', 'quantity', 'bin_quantity']]
+    final_report = final_report[
+        ['child_sku', 'master_sku', 'manufacturer_sku', 'product_name', 'color', 'size', 'main_category', 'importer',
+         'manufacturer', 'quantity', 'bin_quantity']]
 
     # Sort by quantity (big to small), bin_quantity (big to small), product_name (alphabetical order), and importer (alphabetical order)
-    final_report = final_report.sort_values(by=['quantity', 'bin_quantity', 'product_name', 'importer'], ascending=[False, False, True, True])
+    final_report = final_report.sort_values(by=['quantity', 'bin_quantity', 'product_name', 'importer'],
+                                            ascending=[False, False, True, True])
 
-    #rename columns:
+    # rename columns:
     final_report = final_report.rename(columns={'quantity': 'sold quantity', 'bin_quantity': 'Inventory'})
 
-    #drop duplicates:
+    # drop duplicates:
     final_report = final_report.drop_duplicates()
-    
+
     # Add the line here to replace '0' in manufacturer_sku with child_sku
     final_report['manufacturer_sku'] = final_report['manufacturer_sku'].astype(str).str.strip()
-    final_report['manufacturer_sku'] = np.where(final_report['manufacturer_sku'] == '0', final_report['child_sku'], final_report['manufacturer_sku'])
-
+    final_report['manufacturer_sku'] = np.where(final_report['manufacturer_sku'] == '0', final_report['child_sku'],
+                                                final_report['manufacturer_sku'])
 
     ## Get the list of unique importers
     unique_importers = ['All'] + final_report['importer'].unique().tolist()
     print(f"Generated query with importer {importer}: {query}")
     return final_report
+
 
 def get_all_unique_importers():
     # Fetch all unique importers from your database
@@ -107,18 +139,22 @@ def get_all_unique_importers():
 
 def import_csv_to_db(file_content, table_name, columns_to_keep, columns_to_rename, skiprows=1):
     file_like_object = io.StringIO(file_content)
+    LOGGER.debug(f"read {len(file_content)} bytes as csv")
     df = pd.read_csv(file_like_object, skiprows=skiprows)
     print("CSV columns:", df.columns)
     missing_columns = [col for col in columns_to_keep if col not in df.columns]
     if missing_columns:
+        LOGGER.error(f"missing columns {missing_columns}")
         raise ValueError(f"Missing columns in CSV: {', '.join(missing_columns)}")
 
     df = df[columns_to_keep]
     df.rename(columns=columns_to_rename, inplace=True)
     conn = sqlite3.connect('sales_management.db')
+    LOGGER.error(f"inserting table of shape {df.shape} to DB into table {table_name}")
     df.to_sql(table_name, conn, if_exists='replace', index=False)
     conn.close()
-    
+
+
 def update_last_loaded_timestamp(table):
     conn = sqlite3.connect('sales_management.db')
     cursor = conn.cursor()
@@ -139,7 +175,8 @@ def update_last_loaded_timestamp(table):
 
     conn.commit()
     conn.close()
-    
+
+
 def get_last_loaded_timestamp(table):
     conn = sqlite3.connect('sales_management.db')
     cursor = conn.cursor()
@@ -154,6 +191,7 @@ def get_last_loaded_timestamp(table):
 def ram():
     process = psutil.Process()
     return process.memory_info().rss / 2 ** 20
+
 
 def run_matching_script():
     # Connect to the SQLite database
@@ -225,17 +263,18 @@ def report(*args, **kwargs):
         start_date = request.form.get('start_date')
         end_date = request.form.get('end_date')
         importer = request.form.get('importer') or 'All'
-        
+
         # Store the dates and importer in the session
         session['start_date'] = start_date
         session['end_date'] = end_date
         session['importer'] = importer
-        
+
         data = generate_report_data(start_date, end_date, importer)
-    
+
     # This is executed on both POST and GET requests
     unique_importers = ['All'] + get_all_unique_importers()  # Define a function to fetch all unique importers
-    return render_template('report.html', report=data.to_dict(orient='records') if data is not None else None, unique_importers=unique_importers)
+    return render_template('report.html', report=data.to_dict(orient='records') if data is not None else None,
+                           unique_importers=unique_importers)
 
 
 @app.route('/show_report', methods=['GET', 'POST'])
@@ -243,29 +282,32 @@ def show_report():
     start_date = session.get('start_date')
     end_date = session.get('end_date')
     importer = session.get('importer')
-    
+
     final_report = generate_report_data(start_date, end_date, importer)
-    
+
     # Handle POST request when "Save CSV" button is clicked
     if request.method == 'POST':
         quantities_to_order = request.form.getlist('quantity_to_order')
-        rows_with_quantity = final_report[final_report.index.isin([int(index) for index, qty in enumerate(quantities_to_order) if qty])]
+        rows_with_quantity = final_report[
+            final_report.index.isin([int(index) for index, qty in enumerate(quantities_to_order) if qty])]
         rows_with_quantity['Quantity to Order'] = [int(qty) for qty in quantities_to_order if qty]
-        
+
         buf = io.BytesIO()
-        desired_columns_for_csv = ['manufacturer_sku', 'product_name', 'color', 'size', 'manufacturer', 'Quantity to Order']
+        desired_columns_for_csv = ['manufacturer_sku', 'product_name', 'color', 'size', 'manufacturer',
+                                   'Quantity to Order']
         rows_with_quantity[desired_columns_for_csv].to_csv(buf, index=False)
         buf.seek(0)
 
         response = send_file(buf, as_attachment=True, download_name='order_quantities.csv', mimetype='text/csv')
         response.headers["Content-Disposition"] = "attachment; filename=order_quantities.csv"
         return response
-    
+
     # Filter columns for the view and add a placeholder column for Quantity to Order
     final_report['Quantity to Order'] = ''  # placeholder for input
-    desired_columns = ['manufacturer_sku', 'product_name', 'color', 'size', 'manufacturer', 'sold quantity', 'Inventory', 'Quantity to Order']
+    desired_columns = ['manufacturer_sku', 'product_name', 'color', 'size', 'manufacturer', 'sold quantity',
+                       'Inventory', 'Quantity to Order']
     final_report = final_report[desired_columns]
-    
+
     return render_template('report.html', report=final_report.to_dict(orient='records'))
 
 
@@ -274,7 +316,7 @@ def download_csv():
     start_date = session.get('start_date')
     end_date = session.get('end_date')
     importer = session.get('importer')
-    
+
     final_report = generate_report_data(start_date, end_date, importer)
 
     buf = io.BytesIO()
@@ -307,10 +349,13 @@ def choose_file():
             return redirect(request.url)
 
         if file:
+            LOGGER.debug(f"found file, table_type={table_type}")
             file_content = file.stream.read().decode('utf-8')
+            LOGGER.debug(f"read file - {len(file_content)} bytes")
 
             if table_type == "Products":
-                catalog_columns = ["מזהה", "מקט", "מקט יצרן", "סוג פריט", "שם", "יבואן", "יצרן", "קטגוריה ראשית", "מחיר רכישה", "מחיר מכירה"]
+                catalog_columns = ["מזהה", "מקט", "מקט יצרן", "סוג פריט", "שם", "יבואן", "יצרן", "קטגוריה ראשית",
+                                   "מחיר רכישה", "מחיר מכירה"]
                 catalog_columns_rename = {
                     "מזהה": "linet_id",
                     "מקט": "sku",
@@ -326,30 +371,31 @@ def choose_file():
                 import_csv_to_db(file_content, 'Products', catalog_columns, catalog_columns_rename, skiprows=1)
                 update_last_loaded_timestamp('Products')
             elif table_type == "Sales":
-                sales_columns = ["מקט", "שם פריט", "סוג מסמך", "מספר מסמך", "מזהה חשבון", "חברה", "מחיר פריט (לפני מעמ)", "כמות", "סך שורה לפני מעמ", "תאריך הפקה"]
+                sales_columns = ["מקט", "שם פריט", "סוג מסמך", "מספר מסמך", "מזהה חשבון", "חברה",
+                                 "מחיר פריט (לפני מעמ)", "כמות", "סך שורה לפני מעמ", "תאריך הפקה"]
                 sales_columns_rename = {
-                "מקט": "sku",
-                "שם פריט": "product_name",
-                "סוג מסמך": "document_type",
-                "מספר מסמך": "document_number",
-                "מזהה חשבון": "account_id",
-                "חברה": "company",
-                "מחיר פריט (לפני מעמ)": "item_price_before_tax",
-                "כמות": "quantity",
-                "סך שורה לפני מעמ": "total_line_before_tax",
-                "תאריך הפקה": "issue_date"
-            }
+                    "מקט": "sku",
+                    "שם פריט": "product_name",
+                    "סוג מסמך": "document_type",
+                    "מספר מסמך": "document_number",
+                    "מזהה חשבון": "account_id",
+                    "חברה": "company",
+                    "מחיר פריט (לפני מעמ)": "item_price_before_tax",
+                    "כמות": "quantity",
+                    "סך שורה לפני מעמ": "total_line_before_tax",
+                    "תאריך הפקה": "issue_date"
+                }
                 import_csv_to_db(file_content, 'Sales', sales_columns, sales_columns_rename, skiprows=1)
                 update_last_loaded_timestamp('Sales')
 
             elif table_type == "Inventory":
                 inventory_columns = ["מקט", "מקט יצרן", "שם פריט", "כמות"]
                 inventory_columns_rename = {
-                "מקט": "sku",
-                "מקט יצרן": "manufacturer_sku",
-                "שם פריט": "item_name",
-                "כמות": "quantity"
-            }
+                    "מקט": "sku",
+                    "מקט יצרן": "manufacturer_sku",
+                    "שם פריט": "item_name",
+                    "כמות": "quantity"
+                }
                 import_csv_to_db(file_content, 'Inventory', inventory_columns, inventory_columns_rename, skiprows=1)
                 update_last_loaded_timestamp('Inventory')
 
@@ -379,10 +425,11 @@ def choose_file():
                     "מקט": "sku",
                     "מקט יצרן": "manufacturer_sku"
                 }
-                import_csv_to_db(file_content, 'BarcodesForVariations', barcodes_columns, barcodes_columns_rename, skiprows=1)
+                import_csv_to_db(file_content, 'BarcodesForVariations', barcodes_columns, barcodes_columns_rename,
+                                 skiprows=1)
                 update_last_loaded_timestamp('BarcodesForVariations')
 
-        # You can continue the structure for additional tables as needed.
+            # You can continue the structure for additional tables as needed.
 
             flash(f'{table_type} file successfully uploaded and processed')
 
@@ -394,8 +441,12 @@ def choose_file():
     last_loaded_Colors = get_last_loaded_timestamp('Colors')
     last_loaded_Sizes = get_last_loaded_timestamp('Sizes')
     last_loaded_BarcodesForVariations = get_last_loaded_timestamp('BarcodesForVariations')
-    
-    return render_template('index.html', current_time=current_time, last_loaded_products=last_loaded_products, last_loaded_Sales=last_loaded_Sales, last_loaded_Inventory=last_loaded_Inventory, last_loaded_Colors=last_loaded_Colors, last_loaded_Sizes=last_loaded_Sizes, last_loaded_BarcodesForVariations=last_loaded_BarcodesForVariations)
+
+    return render_template('index.html', current_time=current_time, last_loaded_products=last_loaded_products,
+                           last_loaded_Sales=last_loaded_Sales, last_loaded_Inventory=last_loaded_Inventory,
+                           last_loaded_Colors=last_loaded_Colors, last_loaded_Sizes=last_loaded_Sizes,
+                           last_loaded_BarcodesForVariations=last_loaded_BarcodesForVariations)
+
 
 if __name__ == "__main__":
     app.run(debug=True)
