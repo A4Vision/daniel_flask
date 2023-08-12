@@ -5,6 +5,8 @@ from flask import Flask, render_template, request, flash, redirect, url_for, ses
 import io
 import re
 import datetime
+import psutil
+
 
 app = Flask(__name__)
 app.secret_key = 'secret_key_for_flash_messages'
@@ -148,67 +150,73 @@ def get_last_loaded_timestamp(table):
         return result[0]
     return None
 
+
+def ram():
+    process = psutil.Process()
+    return process.memory_info().rss / 2 ** 20
+
 def run_matching_script():
     # Connect to the SQLite database
+    # Connect to the SQLite database
     conn = sqlite3.connect('sales_management.db')
-
     # Load data from Sales, Inventory, Colors, and Sizes tables
-    sales_data = pd.read_sql_query("SELECT sku FROM Sales", conn)
-    inventory_data = pd.read_sql_query("SELECT sku FROM Inventory", conn)
-    colors_data = pd.read_sql_query("SELECT * FROM Colors", conn)
-    sizes_data = pd.read_sql_query("SELECT * FROM Sizes", conn)
+    sales_data = pd.read_sql_query("SELECT distinct sku FROM Sales where not (sku is null)", conn)
+    inventory_data = pd.read_sql_query("SELECT distinct sku FROM Inventory where not (sku is null)", conn)
+
+    def read_substring_mapping(table_name, mapped_column):
+        df = pd.read_sql_query(f"""
+        SELECT distinct lower(Slug) as value, lower({mapped_column}) as {mapped_column} FROM {table_name}
+            UNION
+        SELECT distinct lower(value) as value, lower({mapped_column}) as {mapped_column} FROM {table_name}
+        """, conn).dropna()
+        df['value_length'] = df['value'].str.len()
+        return df.sort_values(by=['value'], ascending=False).set_index('value')[mapped_column].to_dict()
+
+    sizes_data = read_substring_mapping('Sizes', 'size_name')
+    colors_data = read_substring_mapping('Colors', 'color_name')
 
     # Combine SKU values from Sales and Inventory tables, and remove duplicates
-    variation_sku_data = pd.concat([sales_data, inventory_data]).drop_duplicates()
+    variation_sku_data = pd.concat([sales_data, inventory_data]).drop_duplicates().reset_index(drop=True)
 
     # Generate parent SKUs
-    variation_sku_data['parent_sku'] = variation_sku_data['sku'].apply(lambda x: re.match('^[a-zA-Z0-9]*', str(x)).group())
+    variation_sku_data['parent_sku'] = variation_sku_data['sku'].apply(
+        lambda x: re.match('^[a-zA-Z0-9]*', str(x)).group())
 
-    # Standardize data in colors and sizes tables by converting all text to lowercase
-    colors_data = colors_data.applymap(lambda s:s.lower() if type(s) == str else s)
-    sizes_data = sizes_data.applymap(lambda s:s.lower() if type(s) == str else s)
-    
-    # Order colors_data and sizes_data from longest to shortest string length for better matching
-    colors_data = colors_data.sort_values(by='color_name', key=lambda x: -x.str.len()).reset_index(drop=True)
-    sizes_data = sizes_data.sort_values(by='size_name', key=lambda x: -x.str.len()).reset_index(drop=True)
+    def match_item(d, part):
+        if part in d:  # optimization for the full-match case
+            return d[part]
+        for substring in d:
+            if substring in part:
+                return d[substring]
+        return None
 
     def match_color_size(sku, parent_sku):
-        color = None
-        size = None
-        
-        # Convert SKU to string just to be safe
-        sku = str(sku)
-
-        # Extract the substring after the first occurrence of a non-alphanumeric character
-        match_part = re.search(r'[^a-zA-Z0-9](.+)', sku)
-        if match_part:
-            sku_part = match_part.group(1)
-        else:
-            return color, size  # Return None for both color and size if no such character is found
-
+        assert sku is not None
 
         # If the parent_sku and variation_sku are not equal
-        if parent_sku != sku:
-            # Match color
-            for index, row in colors_data.iterrows():
-                if sku and any(substring in sku_part for substring in [str(row['Slug']), str(row['value'])] if substring):
-                    color = row['color_name']
-                    break
+        if parent_sku == sku:
+            return None, None
+        # Extract the substring after the first occurrence of a non-alphanumeric character
+        match_part = re.search(r'[^a-zA-Z0-9](.+)', sku)
+        if not match_part:
+            return None, None
 
-            # Match size
-            for index, row in sizes_data.iterrows():
-                if sku and any(substring in sku_part for substring in [str(row['Slug']), str(row['value'])] if substring):
-                    size = row['size_name']
-                    break
+        sku_part = match_part.group(1)
+        color = match_item(colors_data, sku_part)
+        size = match_item(sizes_data, sku_part)
 
         return color, size
+
     # Apply the match_color_size function to each SKU to extract color and size
-    variation_sku_data[['color', 'size']] = variation_sku_data.apply(lambda row: pd.Series(match_color_size(row['sku'], row['parent_sku'])), axis=1)
+    variation_sku_data[['color_name', 'size_name']] = variation_sku_data.dropna(subset=['sku']).apply(
+        lambda row: pd.Series(match_color_size(row['sku'].lower(), row['parent_sku'])), axis=1)
     # Save the updated 'Variations' table
+
     variation_sku_data.to_sql('Variations', conn, if_exists='replace', index=False)
 
     # Close the connection
     conn.close()
+
 
 @app.route('/report', methods=['GET', 'POST'])
 def report(*args, **kwargs):
