@@ -450,7 +450,7 @@ def choose_file():
     last_loaded_Sizes = get_last_loaded_timestamp('Sizes')
     last_loaded_BarcodesForVariations = get_last_loaded_timestamp('BarcodesForVariations')
 
-    return render_template('index.html', current_time=current_time, last_loaded_products=last_loaded_product,
+    return render_template('index.html', current_time=current_time, last_loaded_products=last_loaded_products,
                            last_loaded_Sales=last_loaded_Sales, last_loaded_Inventory=last_loaded_Inventory,
                            last_loaded_Colors=last_loaded_Colors, last_loaded_Sizes=last_loaded_Sizes,
                            last_loaded_BarcodesForVariations=last_loaded_BarcodesForVariations)
