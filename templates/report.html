@@ -2,63 +2,111 @@
 <html>
 <head>
     <title>Report</title>
+    
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.25/css/jquery.dataTables.css">
+    <!-- ColReorder CSS -->
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/colreorder/1.5.4/css/colReorder.dataTables.css">
+    <!-- jQuery UI CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.css">
+    
+    <!-- jQuery Library -->
+    <script type="text/javascript" charset="utf8" src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <!-- jQuery UI Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+    <!-- DataTables JS -->
+    <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.10.25/js/jquery.dataTables.js"></script>
+    <!-- ColReorder Plugin -->
+    <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/colreorder/1.5.4/js/dataTables.colReorder.js"></script>
+
+    <!-- Initialize DataTables with ColReorder and column resizing -->
+    <script>
+        $(document).ready(function() {
+            var table = $('#reportTable').DataTable({
+                colReorder: true,   // Enables column reordering
+                pageLength: 1000,     // Sets default entries to 1000
+                lengthMenu: [[100, 150, 200, 250, 300, 400, 600, 1000, 2000], [100, 150, 200, 250, 300, 400, 600, 1000, 2000]]  // Entries options
+            });
+
+            // Integrate jQuery UI Resizable with DataTables
+            $("#reportTable th").resizable({
+                handles: "e",
+                minWidth: 40,
+                resize: function (event, ui) {
+                    var sizerID = "#" + $(event.target).attr("id") + "_sizer";
+                    $(sizerID)[0].style.height = "";
+                    $(sizerID)[0].style.border = "";
+                }
+            });
+
+            // Row Highlighting
+            $('#reportTable tbody').on('focus', 'input[name="quantity_to_order"]', function() {
+                $(this).parents('tr').css('background-color', '#D3D3D3');  // light grey
+            }).on('blur', 'input[name="quantity_to_order"]', function() {
+                $(this).parents('tr').css('background-color', '');
+            });
+        });
+    </script>
 </head>
 <body>
 
-    <h2>Generate Report</h2>
+<h2>Generate Report</h2>
 
-    <form action="/report" method="POST">
-        Start Date: <input type="date" name="start_date" required value="{{ request.form['start_date'] }}">
-        End Date: <input type="date" name="end_date" required value="{{ request.form['end_date'] }}">
-        
-        Importer: 
-        <select name="importer">
-            <option value="All">All</option>
-            {% for imp in unique_importers %}
-                <option value="{{ imp }}" {% if imp == request.form.get('importer') %}selected{% endif %}>
-                {{ imp }}
-                </option>
-            {% endfor %}
-        </select>
-
-        <input type="submit" value="View Online">
-    </form>
-    <a href="/download_csv" style="margin-top: 10px; display: inline-block; padding: 6px 12px; background-color: #007BFF; color: white; text-decoration: none; border-radius: 4px;">Download as CSV</a>
-
-    <h2>Sales Report</h2>
+<form action="/report" method="POST">
+    Start Date: <input type="date" name="start_date" required value="{{ request.form['start_date'] }}">
+    End Date: <input type="date" name="end_date" required value="{{ request.form['end_date'] }}">
     
-    {% if report %}
-    <form method="post" action="{{ url_for('show_report') }}">
-        <table border="1">
-            <thead>
+    Importer: 
+    <select name="importer">
+        <option value="All">All</option>
+        {% for imp in unique_importers %}
+            <option value="{{ imp }}" {% if imp == request.form.get('importer') %}selected{% endif %}>
+            {{ imp }}
+            </option>
+        {% endfor %}
+    </select>
+
+    <input type="submit" value="View Online">
+</form>
+
+<a href="/download_csv" style="margin-top: 10px; display: inline-block; padding: 6px 12px; background-color: #007BFF; color: white; text-decoration: none; border-radius: 4px;">Download as CSV</a>
+
+<h2>Sales Report</h2>
+
+{% if report %}
+<form method="post" action="{{ url_for('show_report') }}">
+    <table border="1" id="reportTable">
+        <thead>
+            <tr>
+                <th>Manufacturer</th>
+                <th>Manufacturer SKU</th>
+                <th>Color</th>
+                <th>Size</th>
+                <th>Product Name</th>
+                <th>Sold Quantity</th>
+                <th>Inventory</th>
+                <th>Quantity to Order</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for record in report %}
                 <tr>
-                    <th>Manufacturer SKU</th>
-                    <th>Product Name</th>
-                    <th>Color</th>
-                    <th>Size</th>
-                    <th>Manufacturer</th>
-                    <th>Sold Quantity</th>
-                    <th>Inventory</th>
-                    <th>Quantity to Order</th> <!-- New Column -->
+                    <td>{{ record.manufacturer }}</td>
+                    <td>{{ record.manufacturer_sku }}</td>
+                    <td>{{ record.color }}</td>
+                    <td>{{ record.size }}</td>
+                    <td>{{ record.product_name }}</td>
+                    <td>{{ record['sold quantity'] }}</td>
+                    <td>{{ record.Inventory }}</td>
+                    <td><input type="number" name="quantity_to_order" placeholder="Enter quantity"></td>
                 </tr>
-            </thead>
-            <tbody>
-                {% for record in report %}
-                    <tr>
-                        <td>{{ record.manufacturer_sku }}</td>
-                        <td>{{ record.product_name }}</td>
-                        <td>{{ record.color }}</td>
-                        <td>{{ record.size }}</td>
-                        <td>{{ record.manufacturer }}</td>
-                        <td>{{ record['sold quantity'] }}</td>
-                        <td>{{ record.Inventory }}</td>
-                        <td><input type="number" name="quantity_to_order" placeholder="Enter quantity"></td> <!-- New Input Field -->
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        <button type="submit" style="margin-top: 10px; display: inline-block; padding: 6px 12px; background-color: #007BFF; color: white; text-decoration: none; border-radius: 4px;">Save Quantities</button> <!-- New Button -->
-    </form>
-    {% endif %}
+            {% endfor %}
+        </tbody>
+    </table>
+    <button type="submit" style="margin-top: 10px; display: inline-block; padding: 6px 12px; background-color: #007BFF; color: white; text-decoration: none; border-radius: 4px;">Save Quantities</button>
+</form>
+{% endif %}
+
 </body>
 </html>
+
