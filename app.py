@@ -56,8 +56,8 @@ def generate_report_data(start_date, end_date, importer=None):
         P.purchase_price,
         P.consumer_price,
         P.main_category,
-        V.color,
-        V.size,
+        V.color_name,
+        V.size_name,
         I.quantity as bin_quantity,
         B.manufacturer_sku
     FROM
