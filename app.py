@@ -56,8 +56,8 @@ def generate_report_data(start_date, end_date, importer=None):
         P.purchase_price,
         P.consumer_price,
         P.main_category,
-        V.color_name,
-        V.size_name,
+        V.color,
+        V.size,
         I.quantity as bin_quantity,
         B.manufacturer_sku
     FROM
@@ -246,7 +246,7 @@ def run_matching_script():
         return color, size
 
     # Apply the match_color_size function to each SKU to extract color and size
-    variation_sku_data[['color_name', 'size_name']] = variation_sku_data.dropna(subset=['sku']).apply(
+    variation_sku_data[['color', 'size']] = variation_sku_data.dropna(subset=['sku']).apply(
         lambda row: pd.Series(match_color_size(row['sku'].lower(), row['parent_sku'])), axis=1)
     # Save the updated 'Variations' table
 
