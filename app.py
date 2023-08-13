@@ -252,9 +252,14 @@ def run_matching_script():
 
     variation_sku_data.to_sql('Variations', conn, if_exists='replace', index=False)
 
+    # Query the Variations table and load into a pandas DataFrame
+    df_variations = pd.read_sql_query("SELECT * FROM Variations", conn)
+
     # Close the connection
     conn.close()
 
+    # Display the DataFrame
+    print(df_variations)
 
 @app.route('/report', methods=['GET', 'POST'])
 def report(*args, **kwargs):
