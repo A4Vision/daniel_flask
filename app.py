@@ -22,7 +22,7 @@ logging.basicConfig(filename=LOGFILE,
 
 LOGGER = logging.getLogger('mainApp')
 
-LOGGER.info("starting2")
+LOGGER.info("starting")
 
 
 @app.route('/logs', methods=['GET'])
@@ -40,6 +40,7 @@ def generate_report_data(start_date, end_date, importer=None):
     # Convert the dates into YYYY-MM-DD format to make it compatible with SQL
     start_date_sql = pd.to_datetime(start_date).strftime('%Y-%m-%d')
     end_date_sql = pd.to_datetime(end_date).strftime('%Y-%m-%d')
+
     # Connect to SQLite database
     conn = sqlite3.connect('sales_management.db')
 
@@ -87,46 +88,47 @@ def generate_report_data(start_date, end_date, importer=None):
     # Fill NaN values with zeros
     sales_report = sales_report.fillna(0)
 
-    # Group by 'child_sku', 'item_type' and other columns, and sum up 'quantity'
-    grouped_report = sales_report.groupby(
-        ['child_sku', 'item_type', 'master_sku', 'manufacturer_sku', 'product_name', 'color', 'size', 'main_category',
-         'importer', 'manufacturer', 'purchase_price', 'consumer_price'], as_index=False).agg(
-        {'quantity': 'sum', 'bin_quantity': 'first'})
+    # Define grouping columns
+    grouping_columns = [
+        'child_sku', 'item_type', 'master_sku', 'manufacturer_sku', 'product_name', 'color', 
+        'size', 'main_category', 'importer', 'manufacturer', 'purchase_price', 'consumer_price'
+    ]
 
-    # Filter rows where 'item_type' is 'רגיל' and group again
-    grouped_regular = sales_report[sales_report['item_type'] == 'רגיל'].groupby(
-        ['child_sku', 'master_sku', 'manufacturer_sku', 'product_name', 'color', 'size', 'main_category', 'importer',
-         'manufacturer', 'purchase_price', 'consumer_price'], as_index=False).agg(
-        {'quantity': 'sum', 'bin_quantity': 'first'})
-
-    # Concatenate the two dataframes
-    final_report = pd.concat([grouped_report, grouped_regular], ignore_index=True)
+    # Single Aggregation
+    final_report = sales_report.groupby(grouping_columns, as_index=False).agg(
+        {'quantity': 'sum', 'bin_quantity': 'first'}
+    )
 
     # Reorder the columns
     final_report = final_report[
-        ['child_sku', 'master_sku', 'manufacturer_sku', 'product_name', 'color', 'size', 'main_category', 'importer',
-         'manufacturer', 'quantity', 'bin_quantity']]
+        ['child_sku', 'master_sku', 'manufacturer_sku', 'product_name', 'color', 'size', 
+        'main_category', 'importer', 'manufacturer', 'quantity', 'bin_quantity']
+    ]
 
     # Sort by quantity (big to small), bin_quantity (big to small), product_name (alphabetical order), and importer (alphabetical order)
-    final_report = final_report.sort_values(by=['quantity', 'bin_quantity', 'product_name', 'importer'],
-                                            ascending=[False, False, True, True])
+    final_report = final_report.sort_values(
+        by=['manufacturer', 'product_name', 'color', 'size'],
+        ascending=[True, True, True, True]
+    )
 
-    # rename columns:
-    final_report = final_report.rename(columns={'quantity': 'sold quantity', 'bin_quantity': 'Inventory'})
+    # Rename columns
+    final_report = final_report.rename(columns={
+        'quantity': 'sold quantity', 
+        'bin_quantity': 'Inventory'
+    })
 
-    # drop duplicates:
-    final_report = final_report.drop_duplicates()
-
-    # Add the line here to replace '0' in manufacturer_sku with child_sku
+    # Replace '0' in manufacturer_sku with child_sku
     final_report['manufacturer_sku'] = final_report['manufacturer_sku'].astype(str).str.strip()
-    final_report['manufacturer_sku'] = np.where(final_report['manufacturer_sku'] == '0', final_report['child_sku'],
-                                                final_report['manufacturer_sku'])
+    final_report['manufacturer_sku'] = np.where(
+        final_report['manufacturer_sku'] == '0', 
+        final_report['child_sku'], 
+        final_report['manufacturer_sku']
+    )
 
     ## Get the list of unique importers
     unique_importers = ['All'] + final_report['importer'].unique().tolist()
     print(f"Generated query with importer {importer}: {query}")
     return final_report
-
 
 def get_all_unique_importers():
     # Fetch all unique importers from your database
@@ -143,17 +145,22 @@ def import_csv_to_db(file_content, table_name, columns_to_keep, columns_to_renam
     df = pd.read_csv(file_like_object, skiprows=skiprows)
     print("CSV columns:", df.columns)
     missing_columns = [col for col in columns_to_keep if col not in df.columns]
+    
     if missing_columns:
         LOGGER.error(f"missing columns {missing_columns}")
         raise ValueError(f"Missing columns in CSV: {', '.join(missing_columns)}")
 
     df = df[columns_to_keep]
     df.rename(columns=columns_to_rename, inplace=True)
+    
+    # Removing duplicates for BarcodesForVariations
+    if table_name == "BarcodesForVariations":
+        df.drop_duplicates(inplace=True)
+    
     conn = sqlite3.connect('sales_management.db')
     LOGGER.error(f"inserting table of shape {df.shape} to DB into table {table_name}")
     df.to_sql(table_name, conn, if_exists='replace', index=False)
     conn.close()
-
 
 def update_last_loaded_timestamp(table):
     conn = sqlite3.connect('sales_management.db')
@@ -219,14 +226,14 @@ def run_matching_script():
     # Generate parent SKUs
     variation_sku_data['parent_sku'] = variation_sku_data['sku'].apply(
         lambda x: re.match('^[a-zA-Z0-9]*', str(x)).group())
-
+    
     def match_item(d, part):
-        if part in d:  # optimization for the full-match case
-            return d[part]
-        for substring in d:
-            if substring in part:
-                return d[substring]
+        matches = [substring for substring in d if substring in part]
+        if matches:
+            # Sort by length and return the longest match
+            return d[sorted(matches, key=len, reverse=True)[0]]
         return None
+
 
     def match_color_size(sku, parent_sku):
         assert sku is not None
@@ -311,7 +318,7 @@ def show_report():
 
     # Filter columns for the view and add a placeholder column for Quantity to Order
     final_report['Quantity to Order'] = ''  # placeholder for input
-    desired_columns = ['manufacturer_sku', 'product_name', 'color', 'size', 'manufacturer', 'sold quantity',
+    desired_columns = ['manufacturer', 'manufacturer_sku', 'color', 'size', 'product_name', 'sold quantity',
                        'Inventory', 'Quantity to Order']
     final_report = final_report[desired_columns]
 
