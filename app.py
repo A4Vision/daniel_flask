@@ -22,7 +22,7 @@ logging.basicConfig(filename=LOGFILE,
 
 LOGGER = logging.getLogger('mainApp')
 
-LOGGER.info("starting1")
+LOGGER.info("starting2")
 
 
 @app.route('/logs', methods=['GET'])
