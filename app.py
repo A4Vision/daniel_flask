@@ -376,7 +376,7 @@ def choose_file():
                     "מחיר רכישה": "purchase_price",
                     "מחיר מכירה": "consumer_price"
                 }
-                import_csv_to_db(file_content, 'Products', catalog_columns, catalog_columns_rename, skiprows=1)
+                import_csv_to_db(file_content, 'Products', catalog_columns, catalog_columns_rename, skiprows=2)
                 update_last_loaded_timestamp('Products')
             elif table_type == "Sales":
                 sales_columns = ["מקט", "שם פריט", "סוג מסמך", "מספר מסמך", "מזהה חשבון", "חברה",
@@ -393,7 +393,7 @@ def choose_file():
                     "סך שורה לפני מעמ": "total_line_before_tax",
                     "תאריך הפקה": "issue_date"
                 }
-                import_csv_to_db(file_content, 'Sales', sales_columns, sales_columns_rename, skiprows=1)
+                import_csv_to_db(file_content, 'Sales', sales_columns, sales_columns_rename, skiprows=2)
                 update_last_loaded_timestamp('Sales')
 
             elif table_type == "Inventory":
@@ -404,7 +404,7 @@ def choose_file():
                     "שם פריט": "item_name",
                     "כמות": "quantity"
                 }
-                import_csv_to_db(file_content, 'Inventory', inventory_columns, inventory_columns_rename, skiprows=1)
+                import_csv_to_db(file_content, 'Inventory', inventory_columns, inventory_columns_rename, skiprows=2)
                 update_last_loaded_timestamp('Inventory')
 
             elif table_type == "Colors":
@@ -434,7 +434,7 @@ def choose_file():
                     "מקט יצרן": "manufacturer_sku"
                 }
                 import_csv_to_db(file_content, 'BarcodesForVariations', barcodes_columns, barcodes_columns_rename,
-                                 skiprows=1)
+                                 skiprows=2)
                 update_last_loaded_timestamp('BarcodesForVariations')
 
             # You can continue the structure for additional tables as needed.
