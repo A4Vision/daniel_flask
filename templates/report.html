@@ -40,11 +40,11 @@
             });
 
             // Row Highlighting
-            $('#reportTable tbody').on('focus', 'input[name="quantity_to_order"]', function() {
-                $(this).parents('tr').css('background-color', '#D3D3D3');  // light grey
-            }).on('blur', 'input[name="quantity_to_order"]', function() {
-                $(this).parents('tr').css('background-color', '');
-            });
+            $('#reportTable tbody').on('focus', 'input[name^="quantity_to_order_"]', function() {
+            $(this).parents('tr').css('background-color', '#D3D3D3');  // light grey
+        }).on('blur', 'input[name^="quantity_to_order_"]', function() {
+            $(this).parents('tr').css('background-color', '');
+        });
         });
     </script>
 </head>
