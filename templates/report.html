@@ -98,7 +98,7 @@
                     <td>{{ record.product_name }}</td>
                     <td>{{ record['sold quantity'] }}</td>
                     <td>{{ record.Inventory }}</td>
-                    <td><input type="number" name="quantity_to_order" placeholder="Enter quantity"></td>
+                    <td><input type="number" name="quantity_to_order_{{ record.manufacturer_sku }}" placeholder="Enter quantity"></td>
                 </tr>
             {% endfor %}
         </tbody>
