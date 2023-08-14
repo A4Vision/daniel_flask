@@ -301,11 +301,15 @@ def show_report():
 
     # Handle POST request when "Save CSV" button is clicked
     if request.method == 'POST':
-        quantities_to_order = request.form.getlist('quantity_to_order')
-        rows_with_quantity = final_report[
-            final_report.index.isin([int(index) for index, qty in enumerate(quantities_to_order) if qty])]
-        rows_with_quantity['Quantity to Order'] = [int(qty) for qty in quantities_to_order if qty]
+        # Create a dictionary with SKUs as keys and quantities as values
+        quantities_dict = {key.split('_')[-1]: int(value) for key, value in request.form.items() if 'quantity_to_order_' in key and value}
 
+        # Extract rows from the final report using the SKUs from the dictionary
+        rows_with_quantity = final_report[final_report['manufacturer_sku'].isin(quantities_dict.keys())]
+
+        # Assign the quantities to the rows based on SKU
+        rows_with_quantity['Quantity to Order'] = rows_with_quantity['manufacturer_sku'].map(quantities_dict)
+        
         buf = io.BytesIO()
         desired_columns_for_csv = ['manufacturer_sku', 'product_name', 'color', 'size', 'manufacturer',
                                    'Quantity to Order']
