@@ -228,7 +228,12 @@ def run_matching_script():
         lambda x: re.match('^[a-zA-Z0-9]*', str(x)).group())
     
     def match_item(d, part):
-        matches = [substring for substring in d if substring in part]
+        matches = [substring for substring in d if (
+                    part.startswith(substring + '-') or 
+                    part.endswith('-' + substring) or 
+                    ('-' + substring + '-') in part or
+                    substring == part
+                   )]
         if matches:
             # Sort by length and return the longest match
             return d[sorted(matches, key=len, reverse=True)[0]]
